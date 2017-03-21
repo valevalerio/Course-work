@@ -4,6 +4,7 @@ from sklearn.linear_model import LogisticRegression
 from scipy.linalg import norm
 from sklearn.svm import LinearSVC
 from selector_methods import Selector
+from sklearn.cluster import KMeans
 from math import sqrt
 from copy import deepcopy
 
@@ -44,11 +45,12 @@ class Node:
             raise StandardError("Leaf node does not have split rule.")
         return self._right_child
 
-from sklearn.cluster import KMeans
+
 class Clustering(BaseEstimator):
     
-    def __init__(self, method='k-means'):
+    def __init__(self, method='k-means', n_clusters=6):
         self.method = method
+        self.n_clusters = n_clusters
     
     def fit(self, X):
         
@@ -56,7 +58,7 @@ class Clustering(BaseEstimator):
         object_ = -np.inf
         
         if self.method == 'k-means':
-            clf = KMeans(n_clusters=n_objects // 25, n_jobs=-1)
+            clf = KMeans(n_clusters=self.n_clusters, n_jobs=-1)
             clf.fit(X)
             
             y = clf.predict(X)
@@ -69,9 +71,12 @@ class Clustering(BaseEstimator):
 
 class BUTIF(BaseEstimator):
     
-    def __init__(self, clustering=Clustering(), linear_model=LogisticRegression(), 
-                 selector=None, best_k=None, task='classification'):
-        self.clustering = clustering
+    def __init__(self, clustering_method='k-means', max_leaf=5,
+                 linear_model=LogisticRegression(), 
+                 task='classification', selector=None, best_k=None):
+        self.clustering_method = clustering_method
+        self.max_leaf = max_leaf
+        self.clustering = Clustering(method=self.clustering_method, n_clusters=self.max_leaf)
         self.linear_model = linear_model
         self.selector = selector
         self._root = None
