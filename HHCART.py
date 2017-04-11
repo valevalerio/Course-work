@@ -1,7 +1,9 @@
 from sklearn.base import BaseEstimator
 from scipy.linalg import norm
 from sklearn.decomposition import PCA
+from sklearn.linear_model import Ridge
 import numpy as np
+from copy import deepcopy
 
 class HHCARTNode:
 
@@ -10,10 +12,10 @@ class HHCARTNode:
         self.labels = labels
         self.is_leaf = kwargs.get('is_leaf', False)
         self._split_rules = kwargs.get('split_rules', None)
-        self._householder_matrix = kwargs.get('householder', None)
+        self._weights = kwargs.get('weights', None)
         self._left_child = kwargs.get('left_child', None)
         self._right_child = kwargs.get('right_child', None)
-
+        
         if not self.is_leaf:
             assert self._split_rules
             assert self._left_child
@@ -22,12 +24,9 @@ class HHCARTNode:
     def get_child(self, datum):
         if self.is_leaf:
             raise StandardError("Leaf node does not have children.")
-        feature_index, threshhold = self.split_rules
-        X = datum
-        if self._householder_matrix is not None:
-            X = X.dot(self._householder_matrix)
-        
-        if X[feature_index] < threshhold:
+        X = deepcopy(datum)
+         
+        if X.dot(np.array(self._weights[:-1]).T) - self._weights[-1] < 0:
             return self.left_child
         else:
             return self.right_child
@@ -58,12 +57,14 @@ class HHCARTNode:
 
 class HouseHolderCART(BaseEstimator):
 
-    def __init__(self, impurity, segmentor, tau=1e-4, **kwargs):
+    def __init__(self, impurity, segmentor, method='eig', tau=1e-4, **kwargs):
         self.impurity = impurity
         self.segmentor = segmentor
+        self.method = method
         self.tau = tau
         self._max_depth = kwargs.get('max_depth', None)
         self._min_samples = kwargs.get('min_samples', 2)
+        self._alpha = kwargs.get('alpha', None) #only for linreg method
         self._root = None
         self._nodes = []
     
@@ -91,14 +92,19 @@ class HouseHolderCART(BaseEstimator):
             impurity_best, sr, left_indices, right_indices = self.segmentor(X, y, self.impurity)
             
             #generate Housholder matrix
-            extractor = PCA(n_components=1)
-            extractor.fit(X, y)
-            mu = extractor.components_[0]
+            if self.method == 'eig':
+                extractor = PCA(n_components=1)
+                extractor.fit(X, y)
+                mu = extractor.components_[0]
+            if self.method == 'ridge':
+                reg_model = Ridge(alpha=self._alpha)
+                reg_model.fit(X, y)
+                mu = reg_model.coef_
             
             I = np.diag(np.ones(n_features))
-            check_ = np.sqrt((I - mu).T ** 2).sum(axis=0)
-            if (check_ > self.tau).sum == n_features:
-                i = np.where(check_ > self.tau)[0][0]
+            check_ = np.sqrt(((I - mu) ** 2).sum(axis=1))
+            if (check_ > self.tau).sum() > 0:
+                i = np.argmax(check_)
                 e = np.zeros(n_features)
                 e[i] = 1.0
                 w = (e - mu) / norm(e - mu) 
@@ -116,13 +122,18 @@ class HouseHolderCART(BaseEstimator):
                 
             if not sr:
                 return self._generate_leaf_node(cur_depth, y)
-                
+            
+            i, treshold = sr
+            weights = np.zeros(n_features + 1)
+            weights[:-1] = householder_matrix[:, i]
+            weights[-1] = treshold
+            
             X_left, y_left = X[left_indices], y[left_indices]
             X_right, y_right = X[right_indices], y[right_indices]
 
             node = HHCARTNode(cur_depth, y,
                         split_rules=sr,
-                        householder=householder_matrix,
+                        weights=weights,
                         left_child=self._generate_node(X_left, y_left, cur_depth + 1),
                         right_child=self._generate_node(X_right, y_right, cur_depth + 1),
                         is_leaf=False)

@@ -1,6 +1,7 @@
 from sklearn.base import BaseEstimator
 from scipy.linalg import qr
 import numpy as np
+from copy import deepcopy
 
 class Node:
 
@@ -9,7 +10,7 @@ class Node:
         self.labels = labels
         self.is_leaf = kwargs.get('is_leaf', False)
         self._split_rules = kwargs.get('split_rules', None)
-        self._rotation_matrix = kwargs.get('rotation_matrix', None)
+        self._weights = kwargs.get('weights', None)
         self._left_child = kwargs.get('left_child', None)
         self._right_child = kwargs.get('right_child', None)
 
@@ -21,10 +22,9 @@ class Node:
     def get_child(self, datum):
         if self.is_leaf:
             raise StandardError("Leaf node does not have children.")
-        feature_index, threshhold = self.split_rules
-        X = datum.dot(self._rotation_matrix)
+        X = deepcopy(datum)
         
-        if X[feature_index] < threshhold:
+        if X.dot(np.array(self._weights[:-1]).T) - self._weights[-1] < 0:
             return self.left_child
         else:
             return self.right_child
@@ -61,6 +61,7 @@ class Rand_CART(BaseEstimator):
         self.segmentor = segmentor
         self._max_depth = kwargs.get('max_depth', None)
         self._min_samples = kwargs.get('min_samples', 2)
+        self._compare_with_cart = kwargs.get('compare_with_cart', False)
         self._root = None
         self._nodes = []
     
@@ -85,7 +86,6 @@ class Rand_CART(BaseEstimator):
             return self._generate_leaf_node(cur_depth, y)
         else:
             n_objects, n_features = X.shape
-            impurity_best, sr, left_indices, right_indices = self.segmentor(X, y, self.impurity)
             
             #generate random rotation matrix
             matrix = np.random.multivariate_normal(np.zeros(n_features), 
@@ -95,24 +95,36 @@ class Rand_CART(BaseEstimator):
             X_rotation = X.dot(Q)
             
             impurity_rotation, sr_rotation, left_indices_rotation, right_indices_rotation = self.segmentor(X_rotation, y, self.impurity)
-
-            if impurity_best > impurity_rotation:
+            
+            if self._compare_with_cart:
+                impurity_best, sr, left_indices, right_indices = self.segmentor(X, y, self.impurity)
+                if impurity_best > impurity_rotation:
+                    impurity_best = impurity_rotation
+                    left_indices = left_indices_rotation
+                    right_indices = right_indices_rotation
+                    sr = sr_rotation
+                else:
+                    Q = np.diag(np.ones(n_features))
+            else:
                 impurity_best = impurity_rotation
                 left_indices = left_indices_rotation
                 right_indices = right_indices_rotation
                 sr = sr_rotation
-            else:
-                Q = np.diag(np.ones(n_features))
                 
             if not sr:
                 return self._generate_leaf_node(cur_depth, y)
-                
+            
+            i, treshold = sr
+            weights = np.zeros(n_features + 1)
+            weights[:-1] = Q[:, i]
+            weights[-1] = treshold
+            
             X_left, y_left = X[left_indices], y[left_indices]
             X_right, y_right = X[right_indices], y[right_indices]
 
             node = Node(cur_depth, y,
                         split_rules=sr,
-                        rotation_matrix=Q,
+                        weights=weights,
                         left_child=self._generate_node(X_left, y_left, cur_depth + 1),
                         right_child=self._generate_node(X_right, y_right, cur_depth + 1),
                         is_leaf=False)
