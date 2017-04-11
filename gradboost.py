@@ -37,70 +37,78 @@ class GradBoost(BaseEstimator):
         self.coefs = []
         self.base_learners = []
         
-        if loss=='square':
-            self.loss = lambda r,y: 0.5*(r-y)**2
-            self.loss_derivative = lambda r, y: (r-y)
-            self.task='regression'
-        elif loss=='exp':
-            self.loss = lambda r,y: np.exp(-r*y)
-            self.loss_derivative = lambda r, y: -(y * np.exp(-r*y))
-            self.task='classification'
-        elif loss=='log':
-            self.loss = lambda r,y: np.log(1 + np.exp(-r*y))
-            self.loss_derivative = lambda r, y: -(y/(1 + np.exp(r*y)))
-            self.task='classification'
+        if loss == 'square':
+            self.loss = lambda r, y: 0.5 * (r - y) ** 2
+            self.loss_derivative = lambda r, y: (r - y)
+            self.task = 'regression'
+        elif loss == 'exp':
+            self.loss = lambda r, y: np.exp(-r * y)
+            self.loss_derivative = lambda r, y: -(y * np.exp(-r * y))
+            self.task = 'classification'
+        elif loss == 'log':
+            self.loss = lambda r, y: np.log(1 + np.exp(-r * y))
+            self.loss_derivative = lambda r, y: -(y / (1 + np.exp(r * y)))
+            self.task = 'classification'
         else:
             raise Exception('Not implemented loss "%s"'%loss)
     
     
-    def fit(self, X, y, X_val=None, y_val=None, bad_iters_count=+np.inf):
+    def fit(self, X, y, X_val=None, y_val=None, bad_iters_count=+np.inf, cross_val=False):
         '''If called like fit(X,y), then the number of base_learners is always base_learners_count (specified at initialization).
         If called like fit(self, X, y, X_val, y_val, bad_iters_count) at most there are also base_learners_count base learners but may be less due to 
         early stopping:
         At each iteration accuracy (using validation set, specified by X_val [design matrix], y_val [outputs]) is estimated and 
         position of best iteration tracked. If there were >=bad_iters_count after the best iteration, fitting process stops.'''
         
-        X=X.astype('float32')
-        y=y.astype('float32')
-        D=X.shape[1]
+        X = X.astype('float32')
+        y = y.astype('float32')
+        D = X.shape[1]
         min_loss = +np.inf
         min_pos = -1
+        fit_after = False
         
-        if self.task=='classification':
-            assert all(np.unique(y)==[0,1]),'Only y=0 or y=1 supported!'
-            y[y==0]=-1 # inner format of classes y=+1 or y=-1
-        N=len(X)
+        if self.task == 'classification':
+            assert all(np.unique(y) == [0, 1]),'Only y=0 or y=1 supported!'
+            y[y == 0] = -1 # inner format of classes y=+1 or y=-1
+        N = len(X)
         F_current = self.F(X) # current value, all zeros if not tuned before.
-        if X_val!=None and y_val!=None:
+        
+        if cross_val:
+            self.base_learners_after = []
+            self.coefs_after = []
+        
+        if X_val != None and y_val != None:
+            self.loss_val = []
             F_val = self.F(X_val)
         
         for iter_num in piter(range(self.base_learners_count), percent_period=3, show=False):
             
-            if X_val!=None and y_val!=None:
-                if self.task=='regression':
+            if X_val != None and y_val != None:
+                if self.task == 'regression':
                     Y_val_hat = F_val
                     loss = mean(abs(Y_val_hat-y_val))  # MAE tracking on validation set
                 else:  # classification
-                    Y_val_hat = (F_val>=0).astype(int)    
-                    loss = 1-skl.metrics.accuracy_score(y_val,Y_val_hat)            
-                if loss<min_loss:
-                    min_pos = iter_num
-                    min_loss = loss
+                    Y_val_hat = (F_val >= 0).astype(int)    
+                    loss = 1 - skl.metrics.accuracy_score(y_val,Y_val_hat)            
+                self.loss_val.append(loss)
+                if not fit_after:
+                    if loss < min_loss:
+                        min_pos = iter_num
+                        min_loss = loss
                     
-                if iter_num-min_pos>=bad_iters_count:
-                    self.base_learners_count = len(self.base_learners)
-                    self.log.pr1('\nEarly stopping with %d base lerners, because last %d losses were above min_loss=%.3f at position %d.' % (self.base_learners_count, 
-                                                                                                                                    bad_iters_count,
-                                                                                                                                    min_loss,
-                                                                                                                                    min_pos))
-                    break
+                    if iter_num - min_pos >= bad_iters_count:
+                        self.base_learners_count = len(self.base_learners)
+                        if cross_val:
+                            fit_after = True
+                        else:
+                            break
             
             z = -self.loss_derivative(F_current, y)
             
-            base_learner = deepcopy(self.base_learner)#.__class__(**self.base_learner.get_params())   # recreate base learner
-            base_learner.fit(X,z)
+            base_learner = deepcopy(self.base_learner) # recreate base learner
+            base_learner.fit(X, z)
             
-            if isinstance(base_learner,skl.tree.tree.DecisionTreeRegressor) and (self.refit_tree==True): # tree refitting
+            if isinstance(base_learner, skl.tree.tree.DecisionTreeRegressor) and (self.refit_tree == True): # tree refitting
                 leaf_ids = base_learner.tree_.apply(X)
                 unique_leaf_ids = np.unique(leaf_ids)
                 for leaf_id in unique_leaf_ids:
@@ -118,7 +126,7 @@ class GradBoost(BaseEstimator):
 
             base_pred = base_learner.predict(X)
             
-            if self.fit_coefs==False:  # coefficients by base learner refitting
+            if self.fit_coefs == False:  # coefficients by base learner refitting
                 coef = 1.0 / self.base_learners_count
             else:
                 def loss_after_weighted_addition(coef):
@@ -133,14 +141,21 @@ class GradBoost(BaseEstimator):
                 #if coef==0:
                 #    self.log.pr3('coef=%s is zero!' % coef)
                 
-            coef = coef*self.shrinkage
+            coef = coef * self.shrinkage
             
-            self.coefs.append(coef)       
-            self.base_learners.append(base_learner) 
+            if fit_after:
+                self.coefs_after.append(coef)
+                self.base_learners_after.append(base_learner)
+            else:
+                if cross_val:
+                    self.coefs_after.append(coef)
+                    self.base_learners_after.append(base_learner)
+                self.coefs.append(coef)       
+                self.base_learners.append(base_learner) 
             
-            F_current += coef*base_pred            
-            if X_val!=None and y_val!=None:
-                F_val += coef*base_learner.predict(X_val) 
+            F_current += coef * base_pred            
+            if X_val != None and y_val != None:
+                F_val += coef * base_learner.predict(X_val) 
 
                     
                    
@@ -153,18 +168,18 @@ class GradBoost(BaseEstimator):
 
         for iter_num, (coef, base_learner) in enumerate(zip(self.coefs, self.base_learners)):
             base_pred = base_learner.predict(X)
-            F_val += coef*base_pred
-            if iter_num+1>=max_base_learners_count:
+            F_val += coef * base_pred
+            if iter_num + 1 >= max_base_learners_count:
                 break            
     
         return F_val
     
     
     def predict(self, X, base_learners_count=np.inf):
-        if self.task=='regression':
-            return self.F(X,base_learners_count)
+        if self.task == 'regression':
+            return self.F(X, base_learners_count)
         else:  # classification
-            return (self.F(X,base_learners_count)>=0).astype(int)   # F(X)>=0 = > predition=1 otherwise prediction=0
+            return (self.F(X, base_learners_count) >= 0).astype(int)   # F(X)>=0 = > predition=1 otherwise prediction=0
     
     
     def predict_proba(self, X, base_learners_count=np.inf):
@@ -172,12 +187,12 @@ class GradBoost(BaseEstimator):
         iter_num - at what iteration to stop. If not specified all base learners are used.
         Applicable only for loss function="log". Classes are stored in self.classes_ attribute.'''
         
-        if self.loss!='log':
+        if self.loss != 'log':
             raise Exception('Inapliccable for loss %s'%self.loss)
         self.classes_ = [0, 1]
         scores = self.F(X, base_learners_count)
-        probs = 1/(1+exp(-scores))
-        return hstack([1-probs,probs])
+        probs = 1 / (1 + exp(-scores))
+        return hstack([1 - probs,probs])
     
     
     
@@ -191,14 +206,14 @@ class GradBoost(BaseEstimator):
 
         for iter_num, (coef, base_learner) in enumerate(zip(self.coefs, self.base_learners)):
             base_pred = base_learner.predict(X)
-            F_val += coef*base_pred
+            F_val += coef * base_pred
 
-            if self.task=='regression':
+            if self.task == 'regression':
                 Y_hat = F_val
-                losses[iter_num] = (mean(abs(Y_hat-Y))/mean(abs(Y)))
+                losses[iter_num] = (mean(abs(Y_hat - Y)) / mean(abs(Y)))
             else:  # classification
-                Y_hat = (F_val>=0).astype(int)    
-                losses[iter_num] = 1-skl.metrics.accuracy_score(Y,Y_hat)
+                Y_hat = (F_val >= 0).astype(int)    
+                losses[iter_num] = 1 - skl.metrics.accuracy_score(Y, Y_hat)
 
         return losses
     

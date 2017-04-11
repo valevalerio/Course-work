@@ -23,8 +23,7 @@ class SegmentorBase:
         for left_i, right_i, split_rule in splits:
             if left_i.size > self._min_samples_leaf and right_i.size > self._min_samples_leaf:
                 left_labels, right_labels = labels[left_i], labels[right_i]
-                left_hist, right_hist = itemfreq(left_labels), itemfreq(right_labels)
-                cur_impurity = impurity(left_hist, right_hist)
+                cur_impurity = impurity(left_labels, right_labels)
                 if cur_impurity < best_impurity:
                     best_impurity = cur_impurity
                     best_split_rule = split_rule
@@ -51,22 +50,14 @@ class MeanSegmentor(SegmentorBase):
                     split_rule
                     )
 
-class Gini:
+class MSE:
 
-    def __call__(self, left_label_hist, right_label_hist):
-        left_bincount, right_bincount = left_label_hist[:,1], right_label_hist[:,1]
-        left_total, right_total = np.sum(left_bincount), np.sum(right_bincount)
+    def __call__(self, left_label, right_label):
+        left_len, right_len = len(left_label), len(right_label)
 
-        left_entropy = self._cal_gini(left_bincount, left_total)
-        right_entropy = self._cal_gini(right_bincount, right_total)
+        left_std = np.std(left_label)
+        right_std = np.std(right_label)
 
-        total = left_total + right_total
+        total = left_len + right_len
 
-        return (left_total/total) * left_entropy + (right_total/total) * right_entropy
-
-    def _cal_gini(self, bincount, total):
-        gini = 1.0
-        for count in bincount:
-            freq = count/total
-            gini -= freq**2
-        return gini
+        return (left_len / total) * left_std + (right_len / total) * right_std
