@@ -4,16 +4,23 @@ import numpy as np
 from numpy.linalg import norm
 
 class Node:
-
-    def __init__(self, depth, labels, **kwargs):
+    
+    """
+        Decision node for RidgeCART.
+    """
+    
+    def __init__(self, depth, labels, 
+                 is_lef=False, split_rules=None,
+                method='usual', weights=None,
+                left_child=None, right_child=None):
         self.depth = depth
         self.labels = labels
-        self.is_leaf = kwargs.get('is_leaf', False)
-        self._split_rules = kwargs.get('split_rules', None)
-        self._method = kwargs.get('method', 'usual')
-        self._weights = kwargs.get('weights', None)
-        self._left_child = kwargs.get('left_child', None)
-        self._right_child = kwargs.get('right_child', None)
+        self.is_leaf = is_leaf
+        self._split_rules = split_rules
+        self._method = method
+        self._weights = weights
+        self._left_child = left_child
+        self._right_child = right_child
 
         if not self.is_leaf:
             assert self._split_rules
@@ -21,6 +28,11 @@ class Node:
             assert self._right_child
 
     def get_child(self, datum):
+        
+        """
+            Get direction of input object in tree.
+        """
+        
         if self.is_leaf:
             raise StandardError("Leaf node does not have children.")
         i, treshold = self._split_rules
@@ -63,35 +75,129 @@ class Node:
 
 
 class Ridge_CART(BaseEstimator):
-
-    def __init__(self, impurity, segmentor, alpha=1.0, method='usual', **kwargs):
+    """
+        RidgeCART is Oblique Decision Tree for regression tasks. Key idea of 
+        this method is creating feature <x, w> where w - is coefficients of
+        Ridge Regression without bias.
+        
+        Parameters
+        -----------
+        
+        impurity : class of impurity. 
+        Impurity is functional for optimization in decision tree nodes.
+        
+        segmentor : class of segmentor. 
+        Find best cplit in node by impurity.
+        
+        alpha : float, optional (default=1.0). 
+        Penalty parameter for Risge Regression.
+        
+        method : string, optional (default='usual')
+        If method == 'usual' then feature <x, w> adding as new feature. 
+        If method == 'hard' then feature <x, w> only one in feature space.
+        
+        max_depth : int or None, optional (default=None)
+        The maximum depth of the tree. If None, then nodes are expanded until
+        all leaves are pure or until all leaves contain less than
+        min_samples samples.
+        
+        min_samples : int, float, optional (default=2)
+        The minimum number of samples required to split an internal node.
+        
+        
+        Attribute
+        ----------
+        
+        _root : Node class
+        Root of decision tree.
+        
+        _nodes : list of nodes
+        All nodes of decision tree.
+    """
+    def __init__(self, impurity, segmentor, 
+                 alpha=1.0, method='usual', 
+                max_depth=None, min_samples=2):
         self.impurity = impurity
         self.segmentor = segmentor
         self.alpha = alpha
-        self.method = method # hard and usual
-        self._max_depth = kwargs.get('max_depth', None)
-        self._min_samples = kwargs.get('min_samples', 2)
+        self.method = method
+        self._max_depth = max_depth
+        self._min_samples = min_samples
         self._root = None
         self._nodes = []
     
     def _terminate(self, X, y, cur_depth):
-            if self._max_depth != None and cur_depth == self._max_depth:
-                # maximum depth reached.
-                return True
-            elif y.size < self._min_samples:
-                # minimum number of samples reached.
-                return True
-            elif np.unique(y).size == 1:
-                return True
-            else:
-                return False
+        """
+            Terminate of building tree.
+            
+            
+            Parameters
+            -----------
+            
+            X : array-like, shape = [n_samples, n_features]
+            The training set of this node.
+            
+            y : array-like, shape = [n_samples]
+            The target values of this node.
+            
+            cur_depth : int
+            Current depth.
+            
+            
+            Return
+            -----------
+            
+            terminate : bool
+            If this node is leaf by max_depth or by min_samples then terminate = True.
+        """
+        if self._max_depth != None and cur_depth == self._max_depth:
+            # maximum depth reached.
+            return True
+        elif y.size < self._min_samples:
+            # minimum number of samples reached.
+            return True
+        else:
+            return False
     
     def _generate_leaf_node(self, cur_depth, y):
-            node = Node(cur_depth, y, is_leaf=True)
-            self._nodes.append(node)
-            return node
+        
+        """
+            Generate leaf node.
+            
+            Parameters
+            -----------
+            cur_depth : int
+            Current depth.
+            
+            y : float
+            Target of this leaf node.
+        """
+        
+        node = Node(cur_depth, y, is_leaf=True)
+        self._nodes.append(node)
+        return node
     
     def _generate_node(self, X, y, cur_depth):
+        """
+            Generate current node.
+            
+            
+            Parameters
+            -----------
+            
+            X : array-like, shape = [n_samples, n_features]
+            The training input samples for this node.
+            
+            y : array-like, shape = [n_samples]
+            The target values for this node.
+            
+            cur_depth : int
+            Current depth.
+            
+            Return
+            
+            node : object Node.
+        """
         if self._terminate(X, y, cur_depth):
             return self._generate_leaf_node(cur_depth, y)
         else:
@@ -126,14 +232,67 @@ class Ridge_CART(BaseEstimator):
             return node
     
     def fit(self, X, y):
-        
+        """
+            Build a decision tree regressor from the training set (X, y).
+            
+            
+            Parameters
+            -----------
+            
+            X : array-like, shape = [n_samples, n_features]
+            The training input samples.
+            y : array-like, shape = [n_samples]
+            The target values.
+            
+            
+            Return
+            -----------
+            
+            self : object
+            Returns self.
+        """
         self._root = self._generate_node(X, y, 0)
+        return self
 
     def predict(self, X):
-        def predict_single(datum):
+        """
+            Predict targets for testing set X.
+            
+            
+            Parameters
+            -----------
+            
+            X : array-like, shape = [n_samples, n_features]
+            The testing input samples.
+            
+            
+            Return
+            -----------
+            
+            y : array-like, shape = [n_samples]
+            The target values in test set.
+        """
+        
+        def predict_single(x):
+            """
+                Predict fot single test object.
+                
+                
+                Parameters
+                -----------
+                
+                x : array-like, shape = [n_features]
+                Test sample.
+                
+                Return
+                -----------
+                
+                y : float
+                Target of test sample.
+            """
             cur_node = self._root
             while not cur_node.is_leaf:
-                cur_node = cur_node.get_child(datum)
+                cur_node = cur_node.get_child(x)
             return cur_node.label
         
         if not self._root:
@@ -144,9 +303,25 @@ class Ridge_CART(BaseEstimator):
             predictions[i] = predict_single(X[i, :])
         return predictions
 
-    def score(self, data, labels):
+    def score(self, X, y):
+        """
+            Mean squared error regression score
+        
+        
+            Parameters
+            -----------
+        
+            X : array-like, shape = [n_samples, n_features]
+            The training input samples.
+            y : array-like, shape = [n_samples]
+            The target values.
+            
+            Return
+            ----------
+            score : float
+            Mean squared error.
+        """
         if not self._root:
-            raise StandardError("Decision tree has not been trained.")
-        predictions = self.predict(data)
-        correct_count = np.count_nonzero(predictions == labels)
-        return correct_count / labels.shape[0]
+            raise ValueError("Decision tree has not been trained.")
+        predictions = self.predict(X)
+        return np.mean((y - predictions) ** 2)
