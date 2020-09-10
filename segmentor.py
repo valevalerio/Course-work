@@ -1,6 +1,21 @@
 from abc import ABCMeta, abstractmethod
 import numpy as np
 
+
+class MSE:
+    """
+        Mean squared error impurity criterion
+    """
+    def __call__(self, left_label, right_label):
+        left_len, right_len = len(left_label), len(right_label)
+
+        left_std = np.std(left_label)
+        right_std = np.std(right_label)
+
+        total = left_len + right_len
+
+        return (left_len / total) * left_std + (right_len / total) * right_std
+        
 class SegmentorBase:
     
     """
@@ -115,17 +130,3 @@ class MeanSegmentor(SegmentorBase):
                     right_i,
                     split_rule
                   )
-
-class MSE:
-    """
-        Mean squared error impurity criterion
-    """
-    def __call__(self, left_label, right_label):
-        left_len, right_len = len(left_label), len(right_label)
-
-        left_std = np.std(left_label)
-        right_std = np.std(right_label)
-
-        total = left_len + right_len
-
-        return (left_len / total) * left_std + (right_len / total) * right_std
