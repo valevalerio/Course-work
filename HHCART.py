@@ -5,7 +5,7 @@ from sklearn.linear_model import Ridge
 import numpy as np
 from copy import deepcopy
 
-class HHCARTNode:
+class Node:
 
     def __init__(self, depth, labels, **kwargs):
         self.depth = depth
@@ -15,7 +15,7 @@ class HHCARTNode:
         self._weights = kwargs.get('weights', None)
         self._left_child = kwargs.get('left_child', None)
         self._right_child = kwargs.get('right_child', None)
-        
+        self.counts = kwargs.get("counts",None)
         if not self.is_leaf:
             assert self._split_rules
             assert self._left_child
@@ -79,14 +79,14 @@ class HouseHolderCART(BaseEstimator):
                 return True
             else:
                 return False
-    def _generate_leaf_node(self, cur_depth, y):
-            node = HHCARTNode(cur_depth, y, is_leaf=True)
+    def _generate_leaf_node(self, cur_depth, y,counts):
+            node = Node(cur_depth, y, is_leaf=True,counts = counts)
             self._nodes.append(node)
             return node
     
     def _generate_node(self, X, y, cur_depth):
         if self._terminate(X, y, cur_depth):
-            return self._generate_leaf_node(cur_depth, y)
+            return self._generate_leaf_node(cur_depth, y,counts=np.unique(y,return_counts=True)[1])
         else:
             n_objects, n_features = X.shape
             impurity_best, sr, left_indices, right_indices = self.segmentor(X, y, self.impurity)
@@ -121,7 +121,7 @@ class HouseHolderCART(BaseEstimator):
                 householder_matrix = I
                 
             if not sr:
-                return self._generate_leaf_node(cur_depth, y)
+                return self._generate_leaf_node(cur_depth, y,counts=np.unique(y,return_counts=True)[1])
             
             i, treshold = sr
             weights = np.zeros(n_features + 1)
@@ -131,11 +131,12 @@ class HouseHolderCART(BaseEstimator):
             X_left, y_left = X[left_indices], y[left_indices]
             X_right, y_right = X[right_indices], y[right_indices]
 
-            node = HHCARTNode(cur_depth, y,
+            node = Node(cur_depth, y,
                         split_rules=sr,
                         weights=weights,
                         left_child=self._generate_node(X_left, y_left, cur_depth + 1),
                         right_child=self._generate_node(X_right, y_right, cur_depth + 1),
+                        counts = np.unique(y,return_counts=True)[1],
                         is_leaf=False)
             self._nodes.append(node)
             return node

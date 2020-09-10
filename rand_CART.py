@@ -2,58 +2,7 @@ from sklearn.base import BaseEstimator
 from scipy.linalg import qr
 import numpy as np
 from copy import deepcopy
-
-class Node:
-
-    def __init__(self, depth, labels, **kwargs):
-        self.depth = depth
-        self.labels = labels
-        self.is_leaf = kwargs.get('is_leaf', False)
-        self._split_rules = kwargs.get('split_rules', None)
-        self._weights = kwargs.get('weights', None)
-        self._left_child = kwargs.get('left_child', None)
-        self._right_child = kwargs.get('right_child', None)
-
-        if not self.is_leaf:
-            assert self._split_rules
-            assert self._left_child
-            assert self._right_child
-
-    def get_child(self, datum):
-        if self.is_leaf:
-            raise StandardError("Leaf node does not have children.")
-        X = deepcopy(datum)
-        
-        if X.dot(np.array(self._weights[:-1]).T) - self._weights[-1] < 0:
-            return self.left_child
-        else:
-            return self.right_child
-
-    @property
-    def label(self):
-        if not hasattr(self, '_label'):
-            self._label = np.mean(self.labels)
-        return self._label
-
-    @property
-    def split_rules(self):
-        if self.is_leaf:
-            raise StandardError("Leaf node does not have split rule.")
-        return self._split_rules
-
-    @property
-    def left_child(self):
-        if self.is_leaf:
-            raise StandardError("Leaf node does not have split rule.")
-        return self._left_child
-
-    @property
-    def right_child(self):
-        if self.is_leaf:
-            raise StandardError("Leaf node does not have split rule.")
-        return self._right_child
-
-
+from HHCART import Node
 class Rand_CART(BaseEstimator):
 
     def __init__(self, impurity, segmentor, **kwargs):
@@ -76,14 +25,14 @@ class Rand_CART(BaseEstimator):
                 return True
             else:
                 return False
-    def _generate_leaf_node(self, cur_depth, y):
-            node = Node(cur_depth, y, is_leaf=True)
+    def _generate_leaf_node(self, cur_depth, y,counts):
+            node = Node(cur_depth, y, is_leaf=True, counts = counts)
             self._nodes.append(node)
             return node
     
     def _generate_node(self, X, y, cur_depth):
         if self._terminate(X, y, cur_depth):
-            return self._generate_leaf_node(cur_depth, y)
+            return self._generate_leaf_node(cur_depth, y,counts=np.unique(y,return_counts=True)[1])
         else:
             n_objects, n_features = X.shape
             
@@ -112,7 +61,7 @@ class Rand_CART(BaseEstimator):
                 sr = sr_rotation
                 
             if not sr:
-                return self._generate_leaf_node(cur_depth, y)
+                return self._generate_leaf_node(cur_depth, y,counts=np.unique(y,return_counts=True)[1])
             
             i, treshold = sr
             weights = np.zeros(n_features + 1)
@@ -127,6 +76,7 @@ class Rand_CART(BaseEstimator):
                         weights=weights,
                         left_child=self._generate_node(X_left, y_left, cur_depth + 1),
                         right_child=self._generate_node(X_right, y_right, cur_depth + 1),
+                        counts = np.unique(y,return_counts=True)[1],
                         is_leaf=False)
             self._nodes.append(node)
             return node
