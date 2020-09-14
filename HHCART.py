@@ -34,7 +34,10 @@ class Node:
     @property
     def label(self):
         if not hasattr(self, '_label'):
-            self._label = np.mean(self.labels)
+            out,count = np.unique(self.labels,return_counts=True)
+            self._label = out[np.argmax(count)]
+
+            #self._label = np.mean(self.labels)
         return self._label
 
     @property
