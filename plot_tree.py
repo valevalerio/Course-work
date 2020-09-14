@@ -73,7 +73,12 @@ def PlotTree(obliqueT,filename="OT1Text",visual=True,features=None,classes = Non
     
     g = Digraph('G', filename = filename)
     DFSOblique(radix=obliqueT._root,UseRule=not visual,classes_names=classes,graph=g)
-    g.view()
+    g.render()
+    import os
+    os.system("rm [0-9]*.png")
+    os.remove("-1.png")
+    return g
+    
 
 if __name__ == "__main__":
    
