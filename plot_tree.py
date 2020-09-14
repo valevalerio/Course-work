@@ -78,10 +78,10 @@ def PlotTree(obliqueT,filename="OT1Text",visual=True,features=None,classes = Non
     os.remove("-1.png")
     '''
     
-    import cv2
+    '''import cv2
     img = cv2.imread('tree.png')
     plt.figure(figsize = (20, 20))
-    plt.imshow(img)
+    plt.imshow(img)'''
     return g
     
 
