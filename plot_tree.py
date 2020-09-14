@@ -84,8 +84,12 @@ def PlotTree(obliqueT,filename="OT1Text",visual=True,features=None,classes = Non
     plt.yticks([])
     plt.imshow(img)
     import os
+    
     os.system("rm [0-9]*.png")
-    os.remove("-1.png")
+    try:
+      os.remove("-1.png")
+    except FileNotFoundError:
+      continue
     return g
     
 
