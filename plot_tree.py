@@ -1,4 +1,4 @@
-from HHCART import Node
+from HHCART import *
 import numpy as np
 import matplotlib.pyplot as plt
 from graphviz import Digraph
@@ -94,14 +94,17 @@ def PlotTree(obliqueT,filename="OT1Text",visual=True,features=None,classes = Non
 
 if __name__ == "__main__":
    
-    plt.xlim(-2,3)
-    plt.ylim(-3,4)
-    class_map=LinearSegmentedColormap.from_list('gy',[(.8,.0,0),(.0,.0,.8)], N=3) 
-    #plt.scatter(X[:,0],X[:,1], c=y,cmap=class_map)
-    plt.scatter(X_train[:,1],X_train[:,2], c=y_train,cmap=class_map)
-
-
-    DFSOblique(hhcart._root,UseRule=True)
+    from sklearn.datasets import load_wine
+    X, y = load_wine(return_X_y=True)
+    X = (X - np.mean(X,axis=0)) / np.std(X,axis=0) #Standarization of data
+    
+    hhcart = HouseHolderCART(MSE(), MeanSegmentor())
+    hhcart.fit(X,y)
+    g= PlotTree(obliqueT=hhcart,
+            visual=True,
+            filename="OTTest",
+            classes =["Y"+str(i) for i in range(len(set(y)))],
+            features = ["feature_"+str(i) for i in range(X.shape[1])])
 
     plt.legend()
     #plt.colorbar()
