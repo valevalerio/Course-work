@@ -89,7 +89,7 @@ def PlotTree(obliqueT,filename="OT1Text",visual=True,features=None,classes = Non
     try:
       os.remove("-1.png")
     except FileNotFoundError:
-      continue
+      45+40
     return g
     
 
