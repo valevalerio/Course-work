@@ -51,7 +51,7 @@ def DFSOblique(radix: Node,UseRule,classes_names,graph):
       graph.node(name="node_"+str(my_id),shape='box',label=str(my_id)+"\n"+rule) #rule
     else:
       plt.clf()
-      plt.barh([ i for i in range(len(radix._weights))],radix._weights,color = [('g' if np.sign(w)<0 else 'r') for w in radix._weights[:-1]]+['k'])
+      plt.barh([ i for i in range(len(radix._weights))],radix._weights,color = [('g' if np.sign(w)<0 else 'b') for w in radix._weights[:-1]]+['k'])
       plt.yticks([i for i in range(len(feature_names))],feature_names)
       plt.savefig(str(my_id)+".png")
       rule+="\n"+str(radix.counts)
@@ -74,8 +74,7 @@ def PlotTree(obliqueT,filename="OT1Text",visual=True,features=None,classes = Non
     g = Digraph('G', filename = filename,format = 'png')
     DFSOblique(radix=obliqueT._root,UseRule=not visual,classes_names=classes,graph=g)
     g.view()
-    '''
-    '''
+
     
     import cv2
     img = cv2.imread(filename+'.png')
