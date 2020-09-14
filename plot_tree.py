@@ -61,7 +61,7 @@ def DFSOblique(radix: Node,UseRule,classes_names,graph):
     #print(np.hstack([radix.counts,my_id]))
     return np.hstack([radix.counts,my_id])
 
-def PlotTree(obliqueT,filename="OT1Text.dot",visual=True,features=None,classes = None):
+def PlotTree(obliqueT,filename="OT1Text",visual=True,features=None,classes = None):
     global node_id,feature_names
     node_id=-1
     if features is None:
@@ -71,13 +71,17 @@ def PlotTree(obliqueT,filename="OT1Text.dot",visual=True,features=None,classes =
     feature_names = features
     
     
-    g = Digraph('G', filename = filename)
+    g = Digraph('G', filename = filename,format = 'png')
     DFSOblique(radix=obliqueT._root,UseRule=not visual,classes_names=classes,graph=g)
-    g.render()
     '''import os
     os.system("rm [0-9]*.png")
     os.remove("-1.png")
     '''
+    
+    import cv2
+    img = cv2.imread('tree.png')
+    plt.figure(figsize = (20, 20))
+    plt.imshow(img)
     return g
     
 
