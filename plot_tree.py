@@ -73,15 +73,16 @@ def PlotTree(obliqueT,filename="OT1Text",visual=True,features=None,classes = Non
     
     g = Digraph('G', filename = filename,format = 'png')
     DFSOblique(radix=obliqueT._root,UseRule=not visual,classes_names=classes,graph=g)
+    g.view()
     '''import os
     os.system("rm [0-9]*.png")
     os.remove("-1.png")
     '''
     
-    '''import cv2
-    img = cv2.imread('tree.png')
+    import cv2
+    img = cv2.imread(filename+'.png')
     plt.figure(figsize = (20, 20))
-    plt.imshow(img)'''
+    plt.imshow(img)
     return g
     
 
